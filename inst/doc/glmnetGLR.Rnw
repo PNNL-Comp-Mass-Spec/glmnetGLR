@@ -1,0 +1,83 @@
+\documentclass{article}
+
+\usepackage{graphicx, color}
+\usepackage{url}
+\usepackage{framed}
+\usepackage{here}
+\usepackage{color}
+\usepackage{Sweave}
+\renewcommand{\baselinestretch}{2.0}
+
+% \VignetteIndexEntry{glmnetGLR Example}
+
+\begin{document} 
+\SweaveOpts{concordance=TRUE}
+
+\title{{\tt glmnetGLR}: Generalized Elastic Net Logistic Regression \\}
+\author{Alex Venzin, Landon Sego}
+\maketitle
+
+This document is a short tutorial on how to use the glmnetGLR package. This package was developed as an extension of the capabilities of the {\tt glmnet} package. This document is provided to guide you through the process of installing the R package, reading in the data, training the model, and then applying the model on other data. Note that the beta version of this package will only install correctly on Unix based operating systems (mac OS, Unix, Linux, etc). To install, access the terminal or command line and type ``R CMD INSTALL filepath glmnetGLR\_" and hit the tab key to complete the filename. Now that the package is installed, we can attach the package to the local environment.  
+
+<<install>>==
+require(glmnetGLR)
+@
+
+This package was designed to build generalized classification models using the elastic net algorithm. This tool was originally developed to automate the process of determining the curation quality of proteomics samples for mass spectrometry. We will be using some of the data documented in \cite{thepaper} to demonstrate how to train and use this tool. The elastic net regression model works as both a classification method and a feature selection tool. It incorporates two regularization constraints to balance feature selection and model simplicity using a combination of the ridge penalty ($\ell_2$ normalization) and the lasso penalty ($\ell_1$ normalization). This generic model can be used whenever the classification problem of interest can be decomposed into a binary decision (i.e., yes/no, 0/1, good/bad, etc). The user needs to supply a handful of arguments to the {\tt trainLLRC} function. These arguments are the true class labels ({\tt truthLabels}), the set of predictor variables as the columns of a matrix or dataframe ({\tt predictors}), and the loss matrix ({\tt lossMat}). Below we demonstrate how to use this function.    
+
+<<data>>==
+# Load the VOrbitrap Shewanella QC data
+data(traindata)
+
+# Here are the first few observations of the datasets
+traindata[1:5, 1:7]
+
+# Here we select the predictor variables
+predictors <- as.matrix(traindata[,9:96])
+
+# The logistic regression model requires a binary response
+# variable. 
+resp <- traindata[,"response"]
+
+# Set the loss matrix
+lM <- lossMatrix(c("Good","Good","Poor","Poor"),
+                 c("Good","Poor","Good","Poor"),
+                 c(     0,     1,     5,     0))
+
+# Train the elastic net classifier
+elasticNet <- trainGLR(truthLabels = resp,
+                      predictors = predictors,
+                      lossMat = lM)
+@
+
+\noindent The call to {\tt trainLLRC} solves for the optimal parameter settings $\left(\alpha, \lambda, \tau \right)$ that minimize the expected loss for the elastic net logistic regression model. Keep in mind that the $\alpha$ parameter governs the trade off between the two regularization parameters. When $\alpha = 0$, we are performing $\ell_2$ normalization (ridge regression) and when $\alpha = 1$, we are performing $\ell_1$ normalization (lasso regression).   
+ 
+<<checkdat>>==
+elasticNet
+@
+ 
+\noindent  Now that the classifier has been properly trained and the optimal parameters have been identified, we are interested in making predictions for new data observations. To make predictions for a new set of observations, the user will need the elastic net regression model ({\tt glmnetGLRobject}) and the set of new observations to be predicted ({\tt newdata}). Additionally, one may wish to carry through a set of the predictor variables ({\tt keepCols}) and the column of ground truth for the classes if available ({\tt truthCol}). Note that the ground truth is not required to make predictions regarding the class of future observations, but is required to compute the metrics for the elastic net logistic regression model.     
+
+<<predict>>==
+# load the data for testing
+data(testdata)
+
+prediction_values <- predict(glmnetGLRobject = elasticNet, 
+                             newdata = testdata,
+                             truthCol = 'Curated_Quality',
+                             keepCols = 12:14)
+@
+
+The code above will produce a data.frame object containing the value of the predicted class and if specificed, the column of ground truth responses and the variables to carry through during the prediction process in {\tt keepCols}. Note that if the truth vector is not supplied here that it is not possible to compute the metrics for the elastic net model. In particular, there are five metrics that will be calculated with a call to {\tt summary}: sensitivity, specificity, false negative rate, false positive rate, and accuracy. We can call to this function by doing the following.
+
+<<summary>>==
+summary(prediction_values)
+@
+
+This extension of {\tt glmnet} with a customizable loss function can be used in any number of scenarios. One concept to keep in mind is that this package produces regularized binomial logistic regression models. These classifiers are a special case of logistic regression models and as such must meet a set of assumptions. First, model regularization is often desired when the underlying problem is 'ill-posed'. The regularization parameter is implemented to perform feature selection and to generate (in theory) a unique, optimal logistic regression model. Secondly, these classifiers are designed to classify variables that fall into exactly two categories. If the response variable of interest consists of more than two classes, then the user is referred to the {\tt glmnet} package that contains the necessary software for building multinomial logistic regression models. 
+
+\nocite{*}
+\bibliography{QCDMbib}
+\bibliographystyle{plain}	
+
+\end{document}
